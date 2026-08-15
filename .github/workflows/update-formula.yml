@@ -1,0 +1,117 @@
+name: Update formula
+
+# Checks bpeers01/tkr-releases' latest release against the version pinned
+# in Formula/tkr.rb and opens a PR here with the bump when it drifts.
+#
+# This is a same-repo scheduled check, not a cross-repo dispatch, on
+# purpose: wiring tkr-releases' own release workflow to fire a
+# repository_dispatch into this tap would need a PAT secret configured on
+# that repo (bpeers01/tkr-releases is locked down — see that repo's own
+# release automation) that this workflow doesn't have access to configure.
+# A daily poll of the public releases API needs no secret at all and can't
+# silently stop working if a cross-repo token is later rotated or scoped
+# down without this repo being told.
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, off the hour to avoid GitHub's scheduling pile-up
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch latest tkr-releases release
+        id: latest
+        run: |
+          set -euo pipefail
+          latest_json=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/bpeers01/tkr-releases/releases/latest)
+          tag=$(echo "$latest_json" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).tag_name")
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Compare against pinned formula version
+        id: compare
+        run: |
+          set -euo pipefail
+          pinned=$(grep -oP '(?<=version ")[^"]+' Formula/tkr.rb | head -1)
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$pinned" = "${{ steps.latest.outputs.version }}" ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download checksums for latest release
+        if: steps.compare.outputs.stale == 'true'
+        run: |
+          set -euo pipefail
+          tag="${{ steps.latest.outputs.tag }}"
+          curl -fsSL -o checksums.sha256 \
+            "https://github.com/bpeers01/tkr-releases/releases/download/${tag}/checksums.sha256"
+          cat checksums.sha256
+
+      - name: Bump formula
+        if: steps.compare.outputs.stale == 'true'
+        run: |
+          set -euo pipefail
+          tag="${{ steps.latest.outputs.tag }}"
+          version="${{ steps.latest.outputs.version }}"
+
+          sha_darwin_arm64=$(grep 'tkr-darwin-arm64$' checksums.sha256 | awk '{print $1}')
+          sha_darwin_amd64=$(grep 'tkr-darwin-amd64$' checksums.sha256 | awk '{print $1}')
+          sha_linux_amd64=$(grep 'tkr-linux-amd64$' checksums.sha256 | awk '{print $1}')
+
+          if [ -z "$sha_darwin_arm64" ] || [ -z "$sha_darwin_amd64" ] || [ -z "$sha_linux_amd64" ]; then
+            echo "::error::missing one or more expected checksum entries for $tag — refusing to bump"
+            exit 1
+          fi
+
+          sed -i \
+            -e "s/^  version \".*\"/  version \"${version}\"/" \
+            -e "s#download/v[0-9][^/]*/tkr-darwin-arm64\"#download/${tag}/tkr-darwin-arm64\"#" \
+            -e "s#download/v[0-9][^/]*/tkr-darwin-amd64\"#download/${tag}/tkr-darwin-amd64\"#" \
+            -e "s#download/v[0-9][^/]*/tkr-linux-amd64\"#download/${tag}/tkr-linux-amd64\"#" \
+            Formula/tkr.rb
+
+          # Replace each sha256 line in file order: arm64 block, then intel, then linux.
+          awk -v arm="$sha_darwin_arm64" -v intel="$sha_darwin_amd64" -v linux="$sha_linux_amd64" '
+            /on_arm do/ { in_arm=1 }
+            /on_intel do/ { in_arm=0; in_intel=1 }
+            /on_linux do/ { in_intel=0; in_linux=1 }
+            /sha256 "/ && in_arm { sub(/sha256 ".*"/, "sha256 \"" arm "\""); in_arm_done=1 }
+            /sha256 "/ && in_intel { sub(/sha256 ".*"/, "sha256 \"" intel "\""); in_intel=0 }
+            /sha256 "/ && in_linux { sub(/sha256 ".*"/, "sha256 \"" linux "\""); in_linux=0 }
+            /end$/ && in_arm_done==1 && !in_arm { in_arm_done=0 }
+            { print }
+          ' Formula/tkr.rb > Formula/tkr.rb.new
+          mv Formula/tkr.rb.new Formula/tkr.rb
+
+          cat Formula/tkr.rb
+
+      - name: Open PR
+        if: steps.compare.outputs.stale == 'true'
+        uses: peter-evans/create-pull-request@8867c4aba1b742c39f8c8a0a3a6e5c60d9c85f7c # v7.0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump tkr formula to ${{ steps.latest.outputs.tag }}"
+          title: "chore: bump tkr formula to ${{ steps.latest.outputs.tag }}"
+          body: |
+            Automated bump: `Formula/tkr.rb` was pinned to
+            `${{ steps.compare.outputs.pinned }}`, latest tkr-releases
+            release is `${{ steps.latest.outputs.tag }}`.
+
+            sha256 values pulled from that release's `checksums.sha256`.
+
+            Review before merging — this workflow does not auto-merge.
+          branch: bump-formula-${{ steps.latest.outputs.tag }}
+          delete-branch: true
