@@ -1,7 +1,6 @@
 class Tkr < Formula
-  desc "Token-efficient CLI proxy that filters and compresses command output for LLM agents"
+  desc "Token-efficient CLI proxy that filters and compresses LLM command output"
   homepage "https://github.com/bpeers01/tkr"
-  version "5.22.0"
   license "MIT"
 
   on_macos do
@@ -16,8 +15,10 @@ class Tkr < Formula
   end
 
   on_linux do
-    url "https://github.com/bpeers01/tkr-releases/releases/download/v5.22.0/tkr-linux-amd64"
-    sha256 "721fcc5a9f5728caf43fb6963f64b991461081f8a67555cea42f508b3cc60243"
+    on_intel do
+      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.22.0/tkr-linux-amd64"
+      sha256 "721fcc5a9f5728caf43fb6963f64b991461081f8a67555cea42f508b3cc60243"
+    end
   end
 
   def install
