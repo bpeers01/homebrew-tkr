@@ -25,7 +25,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # persist-credentials: false is load-bearing, not hygiene. checkout v7
+      # persists auth two ways at once — `http.extraheader` *and* an
+      # `includeIf.gitdir` credentials config — and create-pull-request adds
+      # its own extraheader from `token:` on top. Both reach the push, GitHub
+      # rejects it with `remote: Duplicate header: "Authorization"` / HTTP 400,
+      # and the job dies at the Open PR step *after* the formula was correctly
+      # rewritten, so the logs read like a successful bump right up to the
+      # last line. No step between here and Open PR touches git, so dropping
+      # the persisted credentials costs nothing; create-pull-request
+      # authenticates from its own `token:` input.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Fetch latest tkr-releases release
         id: latest
