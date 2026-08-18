@@ -75,9 +75,12 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ steps.latest.outputs.tag }}"
-          curl -fsSL -o checksums.sha256 \
+          # Download outside the checkout. Anything written into the repo
+          # working dir gets staged by create-pull-request, which is how the
+          # v5.23.0 bump PR ended up also adding checksums.sha256 to the tap.
+          curl -fsSL -o "$RUNNER_TEMP/checksums.sha256" \
             "https://github.com/bpeers01/tkr-releases/releases/download/${tag}/checksums.sha256"
-          cat checksums.sha256
+          cat "$RUNNER_TEMP/checksums.sha256"
 
       - name: Bump formula
         if: steps.compare.outputs.stale == 'true'
@@ -86,9 +89,9 @@ jobs:
           tag="${{ steps.latest.outputs.tag }}"
           version="${{ steps.latest.outputs.version }}"
 
-          sha_darwin_arm64=$(grep 'tkr-darwin-arm64$' checksums.sha256 | awk '{print $1}')
-          sha_darwin_amd64=$(grep 'tkr-darwin-amd64$' checksums.sha256 | awk '{print $1}')
-          sha_linux_amd64=$(grep 'tkr-linux-amd64$' checksums.sha256 | awk '{print $1}')
+          sha_darwin_arm64=$(grep 'tkr-darwin-arm64$' "$RUNNER_TEMP/checksums.sha256" | awk '{print $1}')
+          sha_darwin_amd64=$(grep 'tkr-darwin-amd64$' "$RUNNER_TEMP/checksums.sha256" | awk '{print $1}')
+          sha_linux_amd64=$(grep 'tkr-linux-amd64$' "$RUNNER_TEMP/checksums.sha256" | awk '{print $1}')
 
           if [ -z "$sha_darwin_arm64" ] || [ -z "$sha_darwin_amd64" ] || [ -z "$sha_linux_amd64" ]; then
             echo "::error::missing one or more expected checksum entries for $tag — refusing to bump"
