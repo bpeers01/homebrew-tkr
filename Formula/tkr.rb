@@ -5,19 +5,19 @@ class Tkr < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.23.0/tkr-darwin-arm64"
-      sha256 "ff70c03779f3ffe9b9e032c828d65523b8877953cc42283439c350a88bae600d"
+      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.26.0/tkr-darwin-arm64"
+      sha256 "d5ac00241b847f368c5a60bb4b7a6eb96c112619f3f32f9cb6b9c0b44fd138fb"
     end
     on_intel do
-      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.23.0/tkr-darwin-amd64"
-      sha256 "89fbdd4b5bd6e3b3be3c8ee148cf457d277fb9ad140e006e698f641c8a0042d6"
+      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.26.0/tkr-darwin-amd64"
+      sha256 "fd8cea1d567efd01da20b3d0b39505f3e4725642548a395107e9c3bc57639258"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.23.0/tkr-linux-amd64"
-      sha256 "5fa7728ad664e0e5456fe618c9417c19b661b279be1d993b239dcd8197a7b4a8"
+      url "https://github.com/bpeers01/tkr-releases/releases/download/v5.26.0/tkr-linux-amd64"
+      sha256 "c571a923deb096e619823191f51ad327a8dbf7747635a40768afd3108f04a0ac"
     end
   end
 
